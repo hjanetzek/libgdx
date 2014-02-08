@@ -70,6 +70,10 @@ public class Pixmap implements Disposable {
 	static Blending blending;
 	CanvasPixelArray pixels;
 
+	public Context2d getContext(){
+		return context;
+	}
+
 	public Pixmap (FileHandle file) {
 		GwtFileHandle gwtFile = (GwtFileHandle)file;
 		ImageElement img = gwtFile.preloader.images.get(file.path());

@@ -425,21 +425,26 @@ public class GwtInput implements Input {
 
 	private void hookEvents () {
 		addEventListener(canvas, "mousedown", this, true);
+		addEventListener(canvas, "contextmenu", this, true);
 		addEventListener(Document.get(), "mousedown", this, true);
 		addEventListener(canvas, "mouseup", this, true);
 		addEventListener(Document.get(), "mouseup", this, true);
 		addEventListener(canvas, "mousemove", this, true);
 		addEventListener(Document.get(), "mousemove", this, true);
 		addEventListener(canvas, getMouseWheelEvent(), this, true);
-		addEventListener(Document.get(), "keydown", this, false);
-		addEventListener(Document.get(), "keyup", this, false);
-		addEventListener(Document.get(), "keypress", this, false);
-		
+
+// addEventListener(Document.get(), "keydown", this, false);
+// addEventListener(Document.get(), "keyup", this, false);
+// addEventListener(Document.get(), "keypress", this, false);
+		addEventListener(canvas, "keydown", this, false);
+		addEventListener(canvas, "keyup", this, false);
+		addEventListener(canvas, "keypress", this, false);
+
 		addEventListener(canvas, "touchstart", this, true);
 		addEventListener(canvas, "touchmove", this, true);
 		addEventListener(canvas, "touchcancel", this, true);
 		addEventListener(canvas, "touchend", this, true);
-		
+
 	}
 
 	private int getButton (int button) {
@@ -449,7 +454,26 @@ public class GwtInput implements Input {
 		return Buttons.LEFT;
 	}
 
+	protected static native double getDevicePixelRatioJSNI () /*-{
+		return $wnd.devicePixelRatio || 1.0;
+	}-*/;
+
+	protected static native int getWindowWidthJSNI () /*-{
+		return $wnd.innerWidth;
+	}-*/;
+
+	protected static native int getWindowHeightJSNI () /*-{
+		return $wnd.innerHeight;
+	}-*/;
+
 	private void handleEvent (NativeEvent e) {
+
+		if (e.getType().equals("contextmenu")) {
+			e.preventDefault();
+			e.stopPropagation();
+			return;
+		}
+
 		if (e.getType().equals("mousedown")) {
 			if (!e.getEventTarget().equals(canvas) || touched[0]) {
 				float mouseX = (int)getRelativeX(e, canvas);
@@ -473,7 +497,10 @@ public class GwtInput implements Input {
 				this.touchY[0] = (int)getRelativeY(e, canvas);
 			}
 			this.currentEventTimeStamp = TimeUtils.nanoTime();
-			if (processor != null) processor.touchDown(touchX[0], touchY[0], 0, getButton(e.getButton()));
+			if (processor != null) if (processor.touchDown(touchX[0], touchY[0], 0, getButton(e.getButton()))) {
+				e.preventDefault();
+				e.stopPropagation();
+			}
 		}
 
 		if (e.getType().equals("mousemove")) {
@@ -524,7 +551,7 @@ public class GwtInput implements Input {
 			e.preventDefault();
 		}
 		if (e.getType().equals("keydown") && hasFocus) {
-			System.out.println("keydown");
+			// System.out.println("keydown");
 			int code = keyForCode(e.getKeyCode());
 			if (code == 67) {
 				e.preventDefault();
@@ -539,13 +566,13 @@ public class GwtInput implements Input {
 		}
 
 		if (e.getType().equals("keypress") && hasFocus) {
-			System.out.println("keypress");
+			// System.out.println("keypress");
 			char c = (char)e.getCharCode();
 			if (processor != null) processor.keyTyped(c);
 		}
 
 		if (e.getType().equals("keyup") && hasFocus) {
-			System.out.println("keyup");
+			// System.out.println("keyup");
 			int code = keyForCode(e.getKeyCode());
 			this.pressedKeys.remove(code);
 			if (processor != null) processor.keyUp(code);
@@ -558,13 +585,16 @@ public class GwtInput implements Input {
 				Touch touch = touches.get(i);
 				int touchId = touch.getIdentifier();
 				touched[touchId] = true;
-				touchX[touchId] = touch.getRelativeX(canvas);
-				touchY[touchId] = touch.getRelativeY(canvas);
+				double r = getDevicePixelRatioJSNI();
+				int x = (int)(touch.getRelativeX(canvas) * r);
+				int y = (int)(touch.getRelativeY(canvas) * r);
+				touchX[touchId] = x;
+				touchY[touchId] = y;
 				deltaX[touchId] = 0;
 				deltaY[touchId] = 0;
 				if (processor != null) {
 					processor.touchDown(touchX[touchId], touchY[touchId], touchId, Buttons.LEFT);
-				}				
+				}
 			}
 			this.currentEventTimeStamp = TimeUtils.nanoTime();
 			e.preventDefault();
@@ -574,10 +604,13 @@ public class GwtInput implements Input {
 			for (int i = 0, j = touches.length(); i < j; i++) {
 				Touch touch = touches.get(i);
 				int touchId = touch.getIdentifier();
-				deltaX[touchId] = touch.getRelativeX(canvas) - touchX[touchId];
-				deltaY[touchId] = touch.getRelativeY(canvas) - touchY[touchId];
-				touchX[touchId] = touch.getRelativeX(canvas);
-				touchY[touchId] = touch.getRelativeY(canvas);
+				double r = getDevicePixelRatioJSNI();
+				int x = (int)(touch.getRelativeX(canvas) * r);
+				int y = (int)(touch.getRelativeY(canvas) * r);
+				deltaX[touchId] = x - touchX[touchId];
+				deltaY[touchId] = y - touchY[touchId];
+				touchX[touchId] = x;
+				touchY[touchId] = y;
 				if (processor != null) {
 					processor.touchDragged(touchX[touchId], touchY[touchId], touchId);
 				}
@@ -591,33 +624,44 @@ public class GwtInput implements Input {
 				Touch touch = touches.get(i);
 				int touchId = touch.getIdentifier();
 				touched[touchId] = false;
-				deltaX[touchId] = touch.getRelativeX(canvas) - touchX[touchId];
-				deltaY[touchId] = touch.getRelativeY(canvas) - touchY[touchId];				
-				touchX[touchId] = touch.getRelativeX(canvas);
-				touchY[touchId] = touch.getRelativeY(canvas);
+				double r = getDevicePixelRatioJSNI();
+				int x = (int)(touch.getRelativeX(canvas) * r);
+				int y = (int)(touch.getRelativeY(canvas) * r);
+				deltaX[touchId] = x - touchX[touchId];
+				deltaY[touchId] = y - touchY[touchId];
+				touchX[touchId] = x;
+				touchY[touchId] = y;
 				if (processor != null) {
 					processor.touchUp(touchX[touchId], touchY[touchId], touchId, Buttons.LEFT);
-				}					
+				}
 			}
 			this.currentEventTimeStamp = TimeUtils.nanoTime();
 			e.preventDefault();
 		}
-		if (e.getType().equals("touchend")) {			
+		if (e.getType().equals("touchend")) {
 			JsArray<Touch> touches = e.getChangedTouches();
 			for (int i = 0, j = touches.length(); i < j; i++) {
 				Touch touch = touches.get(i);
 				int touchId = touch.getIdentifier();
 				touched[touchId] = false;
-				deltaX[touchId] = touch.getRelativeX(canvas) - touchX[touchId];
-				deltaY[touchId] = touch.getRelativeY(canvas) - touchY[touchId];				
-				touchX[touchId] = touch.getRelativeX(canvas);
-				touchY[touchId] = touch.getRelativeY(canvas);
+				double r = getDevicePixelRatioJSNI();
+				int x = (int)(touch.getRelativeX(canvas) * r);
+				int y = (int)(touch.getRelativeY(canvas) * r);
+				deltaX[touchId] = x - touchX[touchId];
+				deltaY[touchId] = y - touchY[touchId];
+				touchX[touchId] = x;
+				touchY[touchId] = y;
 				if (processor != null) {
 					processor.touchUp(touchX[touchId], touchY[touchId], touchId, Buttons.LEFT);
-				}					
+				}
 			}
 			this.currentEventTimeStamp = TimeUtils.nanoTime();
 			e.preventDefault();
+		} else if (e.getType().equals("mousewheel") || e.getType().equals("DOMMouseScroll")) {
+			float dir = getMouseWheelVelocity(e);
+
+			if (dir != 0 && processor != null) processor.scrolled(dir > 0 ? 1 : -1);
+
 		}
 // if(hasFocus) e.preventDefault();
 	}
